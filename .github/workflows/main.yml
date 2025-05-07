@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
+    - name: Build with Gradle
+      run: ./gradlew build
+
+    - name: Copy JAR to EC2
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.CLOUD_HOST }}
+        username: ${{ secrets.CLOUD_USER }}
+        key: ${{ secrets.CLOUD_SSH_KEY }}
+        source: "build/libs/*.jar"
+        target: "/home/${{ secrets.CLOUD_USER }}/app/"
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build Docker image
+      run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest .
+
+    - name: Push Docker image
+      run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
